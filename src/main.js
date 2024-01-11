@@ -13,8 +13,6 @@ const loaderRef = document.querySelector('.loader');
 formRef.addEventListener('submit', loadsFirstPageOfGallery);
 moreButtonRef.addEventListener('click', loadsOtherGalleryPages);
 
-loaderRef.hidden = true;
-
 const lightbox = new SimpleLightbox('.gallery a', {
   captions: true,
   captionsData: 'alt',
@@ -22,7 +20,10 @@ const lightbox = new SimpleLightbox('.gallery a', {
 });
 
 let searchValue = '';
-let page = 0;
+let page;
+const perPage = 40;
+
+hidesElement(loaderRef);
 
 function loadsFirstPageOfGallery(e) {
   e.preventDefault();
@@ -36,15 +37,17 @@ function loadsFirstPageOfGallery(e) {
     return;
   }
 
-  searchValue = e.currentTarget.elements.query.value;
   page = 1;
+  searchValue = e.currentTarget.elements.query.value;
   moreButtonRef.disabled = false;
-  moreButtonRef.textContent = 'More';
-  moreButtonRef.hidden = true;
-  loaderRef.hidden = false;
+  moreButtonRef.textContent = 'Load more';
   galleryRef.innerHTML = '';
 
-  fetchImages(page, searchValue)
+  hidesElement(moreButtonRef);
+  showsElement(loaderRef);
+
+  fetchImages(searchValue, page, perPage)
+    .then(r => r.data)
     .then(r => {
       if (r.hits.length === 0) {
         iziToast.error({
@@ -58,7 +61,7 @@ function loadsFirstPageOfGallery(e) {
         return;
       }
 
-      page += 1;
+      incrementsPageNumber();
 
       galleryRef.insertAdjacentHTML(
         'beforeend',
@@ -67,11 +70,19 @@ function loadsFirstPageOfGallery(e) {
 
       lightbox.refresh();
 
-      if (r.hits.length === 40) moreButtonRef.hidden = false;
+      if (r.hits.length === perPage) {
+        showsElement(moreButtonRef);
+      } else {
+        iziToast.info({
+          position: 'topRight',
+          message: "Sorry, we've run out of images. Try a new request!",
+          timeout: 3000,
+        });
+      }
     })
     .catch(err => console.log(err))
     .finally(() => {
-      loaderRef.hidden = true;
+      hidesElement(loaderRef);
     });
 
   formRef.reset();
@@ -80,12 +91,15 @@ function loadsFirstPageOfGallery(e) {
 function loadsOtherGalleryPages(e) {
   e.preventDefault();
 
-  moreButtonRef.hidden = true;
-  loaderRef.hidden = false;
+  hidesElement(moreButtonRef);
+  showsElement(loaderRef);
 
-  fetchImages(page, searchValue)
+  fetchImages(searchValue, page, perPage)
+    .then(r => r.data)
     .then(r => {
-      page += 1;
+      const numberOfPages = Math.ceil(r.total / perPage);
+
+      incrementsPageNumber();
 
       galleryRef.insertAdjacentHTML(
         'beforeend',
@@ -94,17 +108,34 @@ function loadsOtherGalleryPages(e) {
 
       lightbox.refresh();
 
-      if (r.hits.length === 40) moreButtonRef.hidden = false;
-      if (r.hits.length < 40) {
-        moreButtonRef.hidden = false;
-        moreButtonRef.disabled = true;
+      if (page - 1 < numberOfPages) showsElement(moreButtonRef);
+      if (page - 1 === numberOfPages) {
+        showsElement(moreButtonRef);
 
-        moreButtonRef.textContent = 'Images are over';
+        moreButtonRef.disabled = true;
+        moreButtonRef.textContent = 'There are no more images!';
+
+        iziToast.info({
+          position: 'topRight',
+          message: "Sorry, we've run out of images. Try a new request!",
+          timeout: 3000,
+        });
       }
     })
     .catch(err => console.log(err))
     .finally(() => {
-      loaderRef.hidden = true;
+      hidesElement(loaderRef);
     });
 }
 
+function incrementsPageNumber() {
+  return (page += 1);
+}
+
+function hidesElement(elem) {
+  elem.hidden = true;
+}
+
+function showsElement(elem) {
+  elem.hidden = false;
+}
